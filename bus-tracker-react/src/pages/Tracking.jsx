@@ -1,31 +1,37 @@
 // Bus Tracking Page Component
-import { useState, useEffect, useCallback } from 'react';
-import GoogleMap from '../components/GoogleMap';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
+import BusMap from '../components/BusMap';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import showToast from '../utils/toast';
-import useGoogleMaps from '../hooks/useGoogleMaps';
+import { buildBusPopup } from '../utils/mapMarkers';
 import CONFIG from '../config/config';
 
 const Tracking = () => {
-    const { loaded: mapsLoaded } = useGoogleMaps();
+    const { user, isAuthenticated } = useAuth();
+    const location = useLocation();
     const [routes, setRoutes] = useState([]);
     const [selectedRouteId, setSelectedRouteId] = useState('');
+    const [studentRoute, setStudentRoute] = useState(null);
     const [buses, setBuses] = useState([]);
     const [selectedBusId, setSelectedBusId] = useState('');
     const [busLocation, setBusLocation] = useState(null);
     const [markers, setMarkers] = useState([]);
-    const [autoRefreshActive, setAutoRefreshActive] = useState(true); // Auto-enabled
+    const [autoRefreshActive, setAutoRefreshActive] = useState(true);
     const [autoRefreshInterval, setAutoRefreshInterval] = useState(null);
     const [lastUpdate, setLastUpdate] = useState(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isLoadingStudent, setIsLoadingStudent] = useState(false);
+    const hasAutoSelectedRoute = useRef(false);
 
     useEffect(() => {
         loadRoutes();
-        // Auto-start refresh when component mounts
+        
         const interval = setInterval(() => {
             if (selectedBusId) {
                 trackSelectedBus(selectedBusId);
-            } else {
+            } else if (selectedRouteId) {
                 refreshAllBusLocations();
             }
         }, CONFIG.AUTO_REFRESH_INTERVAL);
@@ -33,12 +39,58 @@ const Tracking = () => {
         setAutoRefreshInterval(interval);
         
         return () => {
-            // Cleanup on unmount
             if (interval) {
                 clearInterval(interval);
             }
         };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Auto-select student's route when logged in
+    useEffect(() => {
+        const autoSelectStudentRoute = async () => {
+            // Prevent multiple auto-selections
+            if (hasAutoSelectedRoute.current) return;
+            
+            // Check if route was passed via navigation state (from Profile page)
+            if (location.state?.routeId) {
+                hasAutoSelectedRoute.current = true;
+                const routeId = location.state.routeId.toString();
+                setSelectedRouteId(routeId);
+                await loadBusesByRoute(routeId);
+                showToast('Your route has been auto-selected', 'success');
+                // Clear the state so it doesn't persist on refresh
+                window.history.replaceState({}, document.title);
+                return;
+            }
+            
+            // If user is authenticated student, fetch their route
+            if (isAuthenticated && user?.user_type === 'student' && user?.email && routes.length > 0) {
+                setIsLoadingStudent(true);
+                try {
+                    const response = await api.students.getDetails(user.email);
+                    if (response.data.success && response.data.data?.R_ID) {
+                        const studentData = response.data.data;
+                        setStudentRoute(studentData);
+                        
+                        // Auto-select the student's route
+                        const routeId = studentData.R_ID.toString();
+                        hasAutoSelectedRoute.current = true;
+                        setSelectedRouteId(routeId);
+                        await loadBusesByRoute(routeId);
+                        showToast(`Auto-selected your route: ${studentData.R_NAME}`, 'success');
+                    }
+                } catch (error) {
+                    console.error('Failed to load student details:', error);
+                } finally {
+                    setIsLoadingStudent(false);
+                }
+            }
+        };
+
+        if (routes.length > 0) {
+            autoSelectStudentRoute();
+        }
+    }, [isAuthenticated, user, routes, location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadRoutes = async () => {
         try {
@@ -97,22 +149,12 @@ const Tracking = () => {
                     lat: parseFloat(location.LATITUDE),
                     lng: parseFloat(location.LONGITUDE),
                     title: `Bus ${location.B_NO}`,
-                    icon: {
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-                                <circle cx="20" cy="20" r="18" fill="#4f46e5" stroke="white" stroke-width="3"/>
-                                <text x="20" y="26" font-size="20" fill="white" text-anchor="middle" font-family="Arial">🚌</text>
-                            </svg>
-                        `),
-                        scaledSize: new window.google.maps.Size(40, 40)
-                    },
-                    infoWindow: `
-                        <div style="padding: 10px;">
-                            <h4 style="margin: 0 0 10px 0;">Bus ${location.B_NO}</h4>
-                            <p style="margin: 5px 0;"><strong>Driver:</strong> ${location.D_NAME}</p>
-                            <p style="margin: 5px 0;"><strong>Last Updated:</strong> ${new Date(location.TIMESTAMP).toLocaleString()}</p>
-                        </div>
-                    `
+                    color: '#2563eb',
+                    popup: buildBusPopup({
+                        busNo: location.B_NO,
+                        driverName: location.D_NAME,
+                        timestamp: location.TIMESTAMP,
+                    }),
                 };
                 
                 setMarkers([marker]);
@@ -140,27 +182,17 @@ const Tracking = () => {
             if (response.data.success) {
                 const locations = response.data.data;
                 setLastUpdate(new Date());
-                const newMarkers = locations.map(loc => ({
+                const newMarkers = locations.map((loc) => ({
                     id: loc.B_ID,
                     lat: parseFloat(loc.LATITUDE),
                     lng: parseFloat(loc.LONGITUDE),
                     title: `Bus ${loc.B_NO}`,
-                    icon: {
-                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-                                <circle cx="20" cy="20" r="18" fill="#10b981" stroke="white" stroke-width="3"/>
-                                <text x="20" y="26" font-size="20" fill="white" text-anchor="middle" font-family="Arial">🚌</text>
-                            </svg>
-                        `),
-                        scaledSize: new window.google.maps.Size(40, 40)
-                    },
-                    infoWindow: `
-                        <div style="padding: 10px;">
-                            <h4 style="margin: 0 0 10px 0;">Bus ${loc.B_NO}</h4>
-                            <p style="margin: 5px 0;"><strong>Driver:</strong> ${loc.D_NAME || 'N/A'}</p>
-                            <p style="margin: 5px 0;"><strong>Last Updated:</strong> ${new Date(loc.TIMESTAMP).toLocaleString()}</p>
-                        </div>
-                    `
+                    color: '#059669',
+                    popup: buildBusPopup({
+                        busNo: loc.B_NO,
+                        driverName: loc.D_NAME,
+                        timestamp: loc.TIMESTAMP,
+                    }),
                 }));
                 
                 setMarkers(newMarkers);
@@ -207,16 +239,6 @@ const Tracking = () => {
         };
     }, [autoRefreshInterval]);
 
-    if (!mapsLoaded) {
-        return (
-            <div className="page-section">
-                <div className="page-header">
-                    <h1><i className="fas fa-spinner fa-spin"></i> Loading Maps...</h1>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <section id="tracking" className="page-section">
             <div className="page-header">
@@ -224,101 +246,157 @@ const Tracking = () => {
                 <p>Track your bus in real-time on the map</p>
             </div>
             
-            <div className="content-card">
-                <div className="map-controls">
-                    <div className="form-group">
-                        <label htmlFor="routeSelect"><i className="fas fa-route"></i> Step 1: Select Route:</label>
-                        <select id="routeSelect" value={selectedRouteId} onChange={handleRouteChange}>
-                            <option value="">Choose a route first...</option>
-                            {routes.map(route => (
-                                <option key={route.R_ID} value={route.R_ID}>
-                                    {route.R_NAME} ({route.START_POINT} → {route.END_POINT})
-                                </option>
-                            ))}
-                        </select>
+            <div className="tracking-layout">
+                {/* Control Panel */}
+                <div className="tracking-sidebar">
+                    <div className="control-panel">
+                        <div className="panel-header">
+                            <i className="fas fa-sliders"></i>
+                            <span>Controls</span>
+                        </div>
+                        
+                        {/* Student Route Info Banner */}
+                        {studentRoute && (
+                            <div className="student-route-banner">
+                                <div className="banner-icon-small">
+                                    <i className="fas fa-user-check"></i>
+                                </div>
+                                <div className="banner-text">
+                                    <span className="banner-label">Your Route</span>
+                                    <span className="banner-value">{studentRoute.R_NAME}</span>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="control-section">
+                            <div className="step-indicator">
+                                <span className="step-number">1</span>
+                                <span className="step-text">Select Route</span>
+                                {studentRoute && selectedRouteId === studentRoute.R_ID?.toString() && (
+                                    <span className="auto-badge">Auto</span>
+                                )}
+                            </div>
+                            <select id="routeSelect" value={selectedRouteId} onChange={handleRouteChange}>
+                                <option value="">Choose a route...</option>
+                                {routes.map(route => (
+                                    <option key={route.R_ID} value={route.R_ID}>
+                                        {route.R_NAME} {studentRoute?.R_ID === route.R_ID ? '(Your Route)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <div className="control-section">
+                            <div className="step-indicator">
+                                <span className="step-number">2</span>
+                                <span className="step-text">Select Bus</span>
+                            </div>
+                            <select id="busSelect" value={selectedBusId} onChange={handleBusSelect} disabled={!selectedRouteId}>
+                                <option value="">{selectedRouteId ? 'All Buses' : 'Select route first'}</option>
+                                {buses.map(bus => (
+                                    <option key={bus.B_ID} value={bus.B_ID}>
+                                        {bus.B_NO} - {bus.D_NAME}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <div className="control-actions">
+                            <button 
+                                className="btn btn-primary btn-block" 
+                                onClick={refreshAllBusLocations} 
+                                disabled={!selectedRouteId || isRefreshing}
+                            >
+                                <i className={`fas fa-sync-alt ${isRefreshing ? 'fa-spin' : ''}`}></i> 
+                                {isRefreshing ? 'Loading...' : 'Refresh Map'}
+                            </button>
+                            
+                            <button 
+                                className={`btn btn-block ${autoRefreshActive ? 'btn-success' : 'btn-secondary'}`} 
+                                onClick={toggleAutoRefresh}
+                            >
+                                <i className={`fas ${autoRefreshActive ? 'fa-pause' : 'fa-play'}`}></i> 
+                                {autoRefreshActive ? 'Auto-Refresh ON' : 'Auto-Refresh OFF'}
+                            </button>
+                        </div>
+                        
+                        {lastUpdate && (
+                            <div className="last-update-info">
+                                <i className="fas fa-clock"></i>
+                                <span>Updated: {lastUpdate.toLocaleTimeString()}</span>
+                            </div>
+                        )}
                     </div>
                     
-                    <div className="form-group">
-                        <label htmlFor="busSelect"><i className="fas fa-bus"></i> Step 2: Select Bus:</label>
-                        <select id="busSelect" value={selectedBusId} onChange={handleBusSelect} disabled={!selectedRouteId}>
-                            <option value="">{selectedRouteId ? 'All Buses on Route' : 'Select a route first'}</option>
-                            {buses.map(bus => (
-                                <option key={bus.B_ID} value={bus.B_ID}>
-                                    Bus {bus.B_NO} - {bus.D_NAME}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    {/* Bus Info Panel */}
+                    {busLocation && (
+                        <div className="bus-detail-card">
+                            <div className="bus-detail-header">
+                                <div className="bus-icon-circle">
+                                    <i className="fas fa-bus"></i>
+                                </div>
+                                <div>
+                                    <h3>{busLocation.B_NO}</h3>
+                                    <span className="live-badge">
+                                        <span className="live-dot"></span> Live
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div className="bus-detail-grid">
+                                <div className="detail-row">
+                                    <i className="fas fa-user"></i>
+                                    <div>
+                                        <span className="detail-label">Driver</span>
+                                        <span className="detail-value">{busLocation.D_NAME}</span>
+                                    </div>
+                                </div>
+                                <div className="detail-row">
+                                    <i className="fas fa-map-pin"></i>
+                                    <div>
+                                        <span className="detail-label">Location</span>
+                                        <span className="detail-value mono">
+                                            {parseFloat(busLocation.LATITUDE).toFixed(5)}, {parseFloat(busLocation.LONGITUDE).toFixed(5)}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="detail-row">
+                                    <i className="fas fa-clock"></i>
+                                    <div>
+                                        <span className="detail-label">Last Update</span>
+                                        <span className="detail-value">{new Date(busLocation.TIMESTAMP).toLocaleTimeString()}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     
-                    <div className="button-group">
-                        <button 
-                            className="btn btn-primary" 
-                            onClick={() => selectedRouteId && loadBusesByRoute(selectedRouteId)} 
-                            disabled={!selectedRouteId || isRefreshing}
-                        >
-                            <i className={`fas fa-sync-alt ${isRefreshing ? 'fa-spin' : ''}`}></i> Refresh Buses
-                        </button>
-                        <button 
-                            className="btn btn-success" 
-                            onClick={refreshAllBusLocations} 
-                            disabled={!selectedRouteId || isRefreshing}
-                        >
-                            <i className={`fas fa-map-marked-alt ${isRefreshing ? 'fa-spin' : ''}`}></i> Show All Buses
-                        </button>
-                        <button className="btn btn-warning" onClick={toggleAutoRefresh}>
-                            <i className={`fas ${autoRefreshActive ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i> 
-                            <span id="autoRefreshText">
-                                {autoRefreshActive ? 'Disable Auto-Refresh' : 'Enable Auto-Refresh'}
-                            </span>
-                        </button>
-                    </div>
-                    
-                    {lastUpdate && (
-                        <div className="status-indicator">
-                            <i className="fas fa-clock"></i> Last updated: {lastUpdate.toLocaleTimeString()}
-                            {isRefreshing && <span style={{ marginLeft: '10px' }}><i className="fas fa-spinner fa-spin"></i> Refreshing...</span>}
+                    {!busLocation && selectedRouteId && (
+                        <div className="tracking-hint">
+                            <i className="fas fa-info-circle"></i>
+                            <p>Select a specific bus or click "Refresh Map" to see all buses on the route</p>
                         </div>
                     )}
                 </div>
                 
-                {/* Google Map */}
-                <GoogleMap 
-                    center={busLocation ? { 
-                        lat: parseFloat(busLocation.LATITUDE), 
-                        lng: parseFloat(busLocation.LONGITUDE) 
-                    } : CONFIG.MAP_DEFAULT_CENTER}
-                    zoom={busLocation ? 14 : CONFIG.MAP_DEFAULT_ZOOM}
-                    markers={markers}
-                />
-                
-                {/* Bus Info Panel */}
-                {busLocation && (
-                    <div className="bus-info-panel">
-                        <h3><i className="fas fa-bus"></i> Bus Information</h3>
-                        <div className="info-grid">
-                            <div className="info-item">
-                                <span className="label">Bus Number:</span>
-                                <span className="value">{busLocation.B_NO}</span>
-                            </div>
-                            <div className="info-item">
-                                <span className="label">Driver:</span>
-                                <span className="value">{busLocation.D_NAME}</span>
-                            </div>
-                            <div className="info-item">
-                                <span className="label">Latitude:</span>
-                                <span className="value">{parseFloat(busLocation.LATITUDE).toFixed(6)}</span>
-                            </div>
-                            <div className="info-item">
-                                <span className="label">Longitude:</span>
-                                <span className="value">{parseFloat(busLocation.LONGITUDE).toFixed(6)}</span>
-                            </div>
-                            <div className="info-item">
-                                <span className="label">Last Updated:</span>
-                                <span className="value">{new Date(busLocation.TIMESTAMP).toLocaleString()}</span>
-                            </div>
+                {/* Map Section */}
+                <div className="tracking-map-wrapper">
+                    <BusMap
+                        center={busLocation ? { 
+                            lat: parseFloat(busLocation.LATITUDE), 
+                            lng: parseFloat(busLocation.LONGITUDE) 
+                        } : CONFIG.MAP_DEFAULT_CENTER}
+                        zoom={busLocation ? 14 : CONFIG.MAP_DEFAULT_ZOOM}
+                        markers={markers}
+                    />
+                    
+                    {markers.length > 0 && (
+                        <div className="map-overlay-info">
+                            <i className="fas fa-bus"></i>
+                            <span>{markers.length} bus(es) on map</span>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </section>
     );

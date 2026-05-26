@@ -83,13 +83,13 @@ const Navbar = ({ onShowAuthModal }) => {
                 </div>
                 
                 <div className="nav-auth">
-                    <div className="user-info">
-                        {isAuthenticated && (
+                    {isAuthenticated && (
+                        <div className="user-info">
                             <span className="user-name">
                                 <i className="fas fa-user"></i> {user?.username}
                             </span>
-                        )}
-                    </div>
+                        </div>
+                    )}
                     {isAuthenticated ? (
                         <button className="btn-nav-auth" onClick={handleLogout}>
                             <i className="fas fa-sign-out-alt"></i> Logout

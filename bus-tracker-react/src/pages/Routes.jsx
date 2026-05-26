@@ -64,13 +64,25 @@ const Routes = () => {
             </div>
             
             <div className="content-card">
-                <button className="btn btn-primary" onClick={loadRoutes}>
-                    <i className="fas fa-sync-alt"></i> Refresh Routes
-                </button>
+                <div className="routes-toolbar">
+                    <div className="routes-count-badge">
+                        <i className="fas fa-route"></i>
+                        <span><strong>{routes.length}</strong> Routes Available</span>
+                    </div>
+                    <button className="btn btn-secondary" onClick={loadRoutes}>
+                        <i className="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
                 
                 <div id="routesList" className="routes-list">
                     {routes.length === 0 ? (
-                        <p className="empty-message">No routes available</p>
+                        <div className="empty-state-card" style={{marginTop: '2rem'}}>
+                            <div className="empty-state-icon">
+                                <i className="fas fa-route"></i>
+                            </div>
+                            <h3>No Routes Available</h3>
+                            <p>There are no bus routes configured yet</p>
+                        </div>
                     ) : (
                         routes.map(route => (
                             <div key={route.R_ID} className="route-item">

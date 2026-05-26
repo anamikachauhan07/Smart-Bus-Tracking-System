@@ -47,16 +47,21 @@ const Profile = () => {
                     <h1><i className="fas fa-user-circle"></i> My Profile</h1>
                     <p>Please login to view your profile</p>
                 </div>
+                <div className="content-card empty-state-card">
+                    <div className="empty-state-icon">
+                        <i className="fas fa-user-lock"></i>
+                    </div>
+                    <h3>Authentication Required</h3>
+                    <p>Sign in to access your profile and bus service details</p>
+                </div>
             </section>
         );
     }
 
-    // Show Driver Dashboard if user is a driver
     if (user.user_type === 'driver') {
         return <DriverDashboard />;
     }
 
-    // Show Profile for students
     return (
         <section id="profile" className="page-section">
             <div className="page-header">
@@ -65,37 +70,53 @@ const Profile = () => {
             </div>
             
             {loading ? (
-                <div className="content-card">
-                    <div style={{textAlign: 'center', padding: '40px'}}>
-                        <i className="fas fa-spinner fa-spin" style={{fontSize: '2rem', color: '#667eea'}}></i>
-                        <p style={{marginTop: '16px', color: '#6b7280'}}>Loading profile...</p>
+                <div className="content-card loading-card">
+                    <div className="loading-spinner">
+                        <i className="fas fa-spinner fa-spin"></i>
                     </div>
+                    <p>Loading your profile...</p>
                 </div>
             ) : (
-                <>
+                <div className="profile-grid">
                     {/* Account Information Card */}
-                    <div className="content-card">
-                        <h3 style={{marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                            <i className="fas fa-user-circle" style={{color: '#667eea'}}></i>
-                            Account Information
-                        </h3>
-                        <div className="profile-info">
-                            <div className="profile-avatar">
+                    <div className="content-card profile-main-card">
+                        <div className="card-header-fancy">
+                            <div className="header-icon">
                                 <i className="fas fa-user-circle"></i>
                             </div>
-                            <div className="profile-details">
-                                <div className="profile-field">
-                                    <label><i className="fas fa-user"></i> Username:</label>
-                                    <span>{user.username}</span>
+                            <div>
+                                <h3>Account Information</h3>
+                                <span className="header-subtitle">Your login credentials and account type</span>
+                            </div>
+                        </div>
+                        
+                        <div className="profile-hero">
+                            <div className="profile-avatar-large">
+                                <span className="avatar-initials">
+                                    {user.username?.charAt(0).toUpperCase()}
+                                </span>
+                                <div className="avatar-badge">
+                                    <i className="fas fa-check"></i>
                                 </div>
-                                <div className="profile-field">
-                                    <label><i className="fas fa-envelope"></i> Email:</label>
-                                    <span>{user.email}</span>
-                                </div>
-                                <div className="profile-field">
-                                    <label><i className="fas fa-id-badge"></i> Account Type:</label>
-                                    <span className="badge badge-primary">{user.user_type}</span>
-                                </div>
+                            </div>
+                            <div className="profile-identity">
+                                <h2 className="profile-name">{user.username}</h2>
+                                <span className="profile-email">{user.email}</span>
+                                <span className="profile-type-badge">
+                                    <i className="fas fa-graduation-cap"></i>
+                                    {user.user_type}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div className="profile-stats-row">
+                            <div className="profile-stat">
+                                <i className="fas fa-shield-halved"></i>
+                                <span>Verified Account</span>
+                            </div>
+                            <div className="profile-stat">
+                                <i className="fas fa-bell"></i>
+                                <span>Notifications On</span>
                             </div>
                         </div>
                     </div>
@@ -104,90 +125,120 @@ const Profile = () => {
                     {studentDetails ? (
                         <>
                             <div className="content-card">
-                                <h3 style={{marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                                    <i className="fas fa-bus" style={{color: '#667eea'}}></i>
-                                    Bus Service Details
-                                </h3>
-                                <div className="profile-details">
-                                    <div className="profile-field">
-                                        <label><i className="fas fa-id-card"></i> Full Name:</label>
-                                        <span>{studentDetails.S_NAME}</span>
+                                <div className="card-header-fancy">
+                                    <div className="header-icon bus-icon">
+                                        <i className="fas fa-bus"></i>
+                                    </div>
+                                    <div>
+                                        <h3>Bus Service Details</h3>
+                                        <span className="header-subtitle">Your registered transportation info</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="info-cards-grid">
+                                    <div className="mini-info-card">
+                                        <i className="fas fa-id-card"></i>
+                                        <div>
+                                            <span className="info-label">Full Name</span>
+                                            <span className="info-value">{studentDetails.S_NAME}</span>
+                                        </div>
                                     </div>
                                     {studentDetails.S_PHONE && (
-                                        <div className="profile-field">
-                                            <label><i className="fas fa-phone"></i> Phone:</label>
-                                            <span>{studentDetails.S_PHONE}</span>
+                                        <div className="mini-info-card">
+                                            <i className="fas fa-phone"></i>
+                                            <div>
+                                                <span className="info-label">Phone</span>
+                                                <span className="info-value">{studentDetails.S_PHONE}</span>
+                                            </div>
                                         </div>
                                     )}
                                     {studentDetails.REGISTRATION_DATE && (
-                                        <div className="profile-field">
-                                            <label><i className="fas fa-calendar-check"></i> Registered On:</label>
-                                            <span>{new Date(studentDetails.REGISTRATION_DATE).toLocaleDateString('en-US', { 
-                                                year: 'numeric', 
-                                                month: 'long', 
-                                                day: 'numeric' 
-                                            })}</span>
+                                        <div className="mini-info-card">
+                                            <i className="fas fa-calendar-check"></i>
+                                            <div>
+                                                <span className="info-label">Registered</span>
+                                                <span className="info-value">
+                                                    {new Date(studentDetails.REGISTRATION_DATE).toLocaleDateString('en-US', { 
+                                                        year: 'numeric', 
+                                                        month: 'short', 
+                                                        day: 'numeric' 
+                                                    })}
+                                                </span>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
                             </div>
 
                             {studentDetails.R_ID && (
-                                <div className="content-card">
-                                    <h3 style={{marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                                        <i className="fas fa-route" style={{color: '#667eea'}}></i>
-                                        Route & Stop Information
-                                    </h3>
-                                    <div className="profile-details">
-                                        <div className="profile-field">
-                                            <label><i className="fas fa-route"></i> Route Name:</label>
-                                            <span>{studentDetails.R_NAME}</span>
+                                <div className="content-card route-card">
+                                    <div className="card-header-fancy">
+                                        <div className="header-icon route-icon">
+                                            <i className="fas fa-route"></i>
                                         </div>
-                                        <div className="profile-field">
-                                            <label><i className="fas fa-play-circle"></i> Start Point:</label>
-                                            <span>{studentDetails.START_POINT}</span>
+                                        <div>
+                                            <h3>Route & Stop</h3>
+                                            <span className="header-subtitle">Your assigned route and pickup point</span>
                                         </div>
-                                        <div className="profile-field">
-                                            <label><i className="fas fa-stop-circle"></i> End Point:</label>
-                                            <span>{studentDetails.END_POINT}</span>
-                                        </div>
-                                        {studentDetails.DISTANCE && (
-                                            <div className="profile-field">
-                                                <label><i className="fas fa-road"></i> Route Distance:</label>
-                                                <span>{studentDetails.DISTANCE} km</span>
+                                    </div>
+                                    
+                                    <div className="route-visual">
+                                        <div className="route-endpoint start">
+                                            <div className="endpoint-dot"></div>
+                                            <div className="endpoint-info">
+                                                <span className="endpoint-label">Start</span>
+                                                <span className="endpoint-name">{studentDetails.START_POINT}</span>
                                             </div>
-                                        )}
-                                        {studentDetails.STOP_NAME && (
-                                            <>
-                                                <div className="profile-field">
-                                                    <label><i className="fas fa-map-marker-alt"></i> My Stop:</label>
-                                                    <span style={{fontWeight: '600', color: '#667eea'}}>{studentDetails.STOP_NAME}</span>
-                                                </div>
+                                        </div>
+                                        <div className="route-line">
+                                            <div className="route-name-badge">{studentDetails.R_NAME}</div>
+                                            {studentDetails.DISTANCE && (
+                                                <span className="route-distance">{studentDetails.DISTANCE} km</span>
+                                            )}
+                                        </div>
+                                        <div className="route-endpoint end">
+                                            <div className="endpoint-dot"></div>
+                                            <div className="endpoint-info">
+                                                <span className="endpoint-label">End</span>
+                                                <span className="endpoint-name">{studentDetails.END_POINT}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {studentDetails.STOP_NAME && (
+                                        <div className="my-stop-highlight">
+                                            <div className="stop-icon-wrapper">
+                                                <i className="fas fa-location-dot"></i>
+                                            </div>
+                                            <div className="stop-details">
+                                                <span className="stop-badge-label">Your Pickup Stop</span>
+                                                <h4>{studentDetails.STOP_NAME}</h4>
                                                 {studentDetails.LOCATION && (
-                                                    <div className="profile-field">
-                                                        <label><i className="fas fa-location-dot"></i> Stop Location:</label>
-                                                        <span>{studentDetails.LOCATION}</span>
-                                                    </div>
+                                                    <p>{studentDetails.LOCATION}</p>
                                                 )}
                                                 {studentDetails.STOP_ORDER && (
-                                                    <div className="profile-field">
-                                                        <label><i className="fas fa-list-ol"></i> Stop Order:</label>
-                                                        <span>#{studentDetails.STOP_ORDER}</span>
-                                                    </div>
+                                                    <span className="stop-order-badge">Stop #{studentDetails.STOP_ORDER}</span>
                                                 )}
-                                            </>
-                                        )}
-                                    </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <button 
+                                        className="btn btn-primary btn-track" 
+                                        onClick={() => navigate('/tracking', { state: { routeId: studentDetails.R_ID } })}
+                                    >
+                                        <i className="fas fa-satellite-dish"></i> Track My Bus
+                                    </button>
                                 </div>
                             )}
                         </>
                     ) : (
-                        <div className="content-card" style={{textAlign: 'center', padding: '40px'}}>
-                            <i className="fas fa-info-circle" style={{fontSize: '3rem', color: '#f59e0b', marginBottom: '16px'}}></i>
-                            <h3 style={{marginBottom: '12px', color: '#1f2937'}}>Bus Service Not Registered</h3>
-                            <p style={{color: '#6b7280', marginBottom: '24px'}}>
-                                You haven't registered for bus tracking service yet.
-                            </p>
+                        <div className="content-card empty-state-card">
+                            <div className="empty-state-icon warning">
+                                <i className="fas fa-bus"></i>
+                            </div>
+                            <h3>Bus Service Not Registered</h3>
+                            <p>Register now to get real-time bus tracking and arrival notifications</p>
                             <button 
                                 className="btn btn-primary"
                                 onClick={() => navigate('/register')}
@@ -197,13 +248,19 @@ const Profile = () => {
                         </div>
                     )}
 
-                    {/* Actions */}
-                    <div className="profile-actions" style={{marginTop: '24px'}}>
-                        <button className="btn btn-danger" onClick={handleLogout}>
-                            <i className="fas fa-sign-out-alt"></i> Logout
-                        </button>
+                    {/* Logout Card */}
+                    <div className="content-card logout-card">
+                        <div className="logout-content">
+                            <div>
+                                <h4>Sign Out</h4>
+                                <p>End your current session</p>
+                            </div>
+                            <button className="btn btn-danger" onClick={handleLogout}>
+                                <i className="fas fa-sign-out-alt"></i> Logout
+                            </button>
+                        </div>
                     </div>
-                </>
+                </div>
             )}
         </section>
     );

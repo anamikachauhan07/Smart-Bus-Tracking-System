@@ -1,0 +1,471 @@
+================================================================================
+  SMART BUS TRACKING SYSTEM — MONGODB DATABASE OVERVIEW
+================================================================================
+
+This document explains how the database works after migrating from MySQL to
+MongoDB: collections, relationships, ID strategy, data flow, and how the
+Flask backend connects everything.
+
+
+================================================================================
+1. HIGH-LEVEL ARCHITECTURE
+================================================================================
+
+  React Frontend (port 5173)
+        |
+        |  HTTP requests via /api proxy (Vite)
+        v
+  Flask Backend (port 5000)  —  backend/app.py
+        |
+        |  PyMongo driver — backend/db.py
+        v
+  MongoDB (local or Atlas)   —  database name: smartbus
+        |
+        +-- collections (documents = old SQL rows)
+
+
+Connection string is read from backend/.env:
+
+  MONGODB_URI=mongodb://localhost:27017
+  MONGODB_DB_NAME=smartbus
+
+For MongoDB Atlas:
+
+  MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority
+  MONGODB_DB_NAME=smartbus
+
+
+================================================================================
+2. MYSQL vs MONGODB — WHAT CHANGED
+================================================================================
+
+  MySQL (before)                    MongoDB (now)
+  ------------------------------    ---------------------------------
+  Database: smartbus                Database: smartbus
+  Table: BUS                        Collection: buses
+  Row                               Document (JSON object)
+  Column                            Field
+  AUTO_INCREMENT                    counters collection + get_next_id()
+  FOREIGN KEY (enforced by DB)      Integer reference fields (app-enforced)
+  JOIN queries                      Multiple find_one() calls in Python
+  schema.sql INSERT data            import_sql_to_mongo.py imports SQL file
+
+
+================================================================================
+3. ALL COLLECTIONS
+================================================================================
+
+Database: smartbus
+
+  Collection         | Old SQL Table   | Primary Key Field | Purpose
+  -------------------|-----------------|-------------------|---------------------------
+  buses              | BUS             | B_ID              | Bus fleet details
+  routes             | ROUTE           | R_ID              | Route names & endpoints
+  stops              | STOP            | STOP_ID           | Stops per route
+  students           | STUDENT         | S_ID              | Bus service registrations
+  schedules          | SCHEDULE        | SCH_ID            | Bus timetables
+  tracking           | TRACKING        | T_ID              | GPS location history
+  user_accounts      | USER_ACCOUNTS   | USER_ID           | Login credentials
+  drivers            | DRIVER          | DRIVER_ID         | Driver profiles
+  notifications      | NOTIFICATION    | N_ID              | Student alerts
+  counters           | (new)           | _id               | Auto-increment IDs
+
+
+================================================================================
+4. HOW COLLECTIONS CONNECT (RELATIONSHIPS)
+================================================================================
+
+MongoDB does NOT enforce foreign keys. Relationships are stored as integer
+fields inside documents — the same ID numbers from the original SQL schema.
+
+                         +------------------+
+                         |   user_accounts  |
+                         |   USER_ID (PK)   |
+                         |   USERNAME       |
+                         |   USER_TYPE      |
+                         +--------+---------+
+                                  |
+                    +-------------+-------------+
+                    |                           |
+                    v                           v
+           +----------------+          +----------------+
+           |    drivers     |          |   (student     |
+           |  DRIVER_ID(PK) |          |    uses login  |
+           |  USER_ID  ---->|          |    only; bus   |
+           |  B_ID     -----|--->      |    reg in      |
+           +----------------+   |     |    students)   |
+                                |     +----------------+
+                                |
+  +----------+    R_ID           |     +----------------+
+  |  routes  |<-----------------+-----|     buses      |
+  | R_ID(PK) |<------- R_ID -----------+|   B_ID (PK)    |
+  +----+-----+                          |   B_NO, D_NAME |
+       |                                +-------+--------+
+       | R_ID                                   | B_ID
+       v                                        v
+  +----------+                          +----------------+
+  |  stops   |                          |   tracking     |
+  |STOP_ID   |                          |   T_ID (PK)    |
+  | R_ID --->|                          |   B_ID ------> |
+  |STOP_ORDER|                          | LATITUDE/LONG  |
+  +----+-----+                          +----------------+
+       |
+       | STOP_ID, R_ID
+       v
+  +----------+         +----------------+
+  | students |         |  notifications |
+  | S_ID(PK) |<--------|  N_ID (PK)     |
+  | STOP_ID  |  S_ID   |  S_ID -------->|
+  | R_ID     |         |  B_ID -------->|
+  +----------+         +----------------+
+       |
+       | R_ID, B_ID
+       v
+  +----------+
+  | schedules|
+  | SCH_ID   |
+  | B_ID     |
+  | R_ID     |
+  +----------+
+
+
+REFERENCE FIELD LEGEND
+----------------------
+  R_ID      → points to routes.R_ID
+  B_ID      → points to buses.B_ID
+  STOP_ID   → points to stops.STOP_ID
+  S_ID      → points to students.S_ID
+  USER_ID   → points to user_accounts.USER_ID
+  DRIVER_ID → points to drivers.DRIVER_ID
+
+
+================================================================================
+5. SAMPLE DOCUMENTS (what data looks like in MongoDB)
+================================================================================
+
+--- buses collection ---
+{
+  "B_ID": 1,
+  "B_NO": "BUS001",
+  "D_NAME": "Rajesh Kumar",
+  "D_PHONE": "9876543210",
+  "CAPACITY": 50,
+  "R_ID": 1
+}
+
+--- routes collection ---
+{
+  "R_ID": 1,
+  "R_NAME": "Route 1",
+  "START_POINT": "Doiwala",
+  "END_POINT": "Gehu Bus Stand"
+}
+
+--- stops collection ---
+{
+  "STOP_ID": 1,
+  "STOP_NAME": "Doiwala",
+  "LOCATION": "Doiwala Chowk",
+  "R_ID": 1,
+  "STOP_ORDER": 1
+}
+
+--- students collection ---
+{
+  "S_ID": 1,
+  "S_NAME": "Priya Mehta",
+  "S_EMAIL": "priya@acc.edu.in",
+  "S_PHONE": "9000000001",
+  "STOP_ID": 1,
+  "R_ID": 1,
+  "NOTIFY_EMAIL": true,
+  "NOTIFY_SMS": false,
+  "NOTIFY_PUSH": true,
+  "REGISTRATION_DATE": "2026-05-26T12:00:00"
+}
+
+--- user_accounts collection ---
+{
+  "USER_ID": 1,
+  "USERNAME": "student1",
+  "EMAIL": "student1@acc.edu.in",
+  "PASSWORD_HASH": "ef92b778...",
+  "USER_TYPE": "student",
+  "IS_ACTIVE": true,
+  "CREATED_AT": "2026-05-26T12:00:00"
+}
+
+--- drivers collection ---
+{
+  "DRIVER_ID": 1,
+  "USER_ID": 2,
+  "B_ID": 1,
+  "LICENSE_NUMBER": "DL-001",
+  "EXPERIENCE_YEARS": 5
+}
+
+--- tracking collection ---
+{
+  "T_ID": 1,
+  "B_ID": 1,
+  "TIMESTAMP": "2026-05-26T12:00:00",
+  "LATITUDE": 30.2849,
+  "LONGITUDE": 78.048,
+  "CURRENT_STOP_ID": null
+}
+
+--- schedules collection ---
+{
+  "SCH_ID": 1,
+  "B_ID": 1,
+  "R_ID": 1,
+  "A_TIME": "07:30:00",
+  "D_TIME": "08:00:00",
+  "DAY": "Monday"
+}
+
+--- notifications collection ---
+{
+  "N_ID": 1,
+  "S_ID": 1,
+  "B_ID": 1,
+  "MESSAGE": "Your bus BUS001 is approaching!",
+  "TYPE": "pickup",
+  "IS_READ": false,
+  "CREATED_AT": "2026-05-26T12:00:00"
+}
+
+--- counters collection (auto-increment) ---
+{ "_id": "B_ID",    "seq": 10 }
+{ "_id": "USER_ID", "seq": 11 }
+{ "_id": "S_ID",    "seq": 10 }
+
+
+Note: MongoDB also adds an internal "_id" ObjectId to every document.
+The application uses B_ID, R_ID, etc. and ignores MongoDB's _id in API responses.
+
+
+================================================================================
+6. AUTO-INCREMENT ID SYSTEM (replaces SQL AUTO_INCREMENT)
+================================================================================
+
+File: backend/db.py
+
+  Function: get_next_id("B_ID")
+  1. Finds document { _id: "B_ID" } in counters collection
+  2. Increments seq by 1 atomically
+  3. Returns the new number as the primary key
+
+  Example — inserting a new bus:
+    new_id = get_next_id("B_ID")   # returns 11
+    db.buses.insert_one({ "B_ID": 11, "B_NO": "BUS011", ... })
+
+  On seed/import, init_counter() sets counters to the highest existing ID
+  so new records never collide with seeded data.
+
+
+================================================================================
+7. HOW JOINS WORK NOW (application-level linking)
+================================================================================
+
+In MySQL, one SQL query with JOIN returned combined data.
+In MongoDB, the Flask backend runs separate queries and merges results.
+
+Example — GET /student/details/:email (backend/app.py):
+
+  Step 1:  student = db.students.find_one({ "S_EMAIL": email })
+  Step 2:  route   = db.routes.find_one({ "R_ID": student["R_ID"] })
+  Step 3:  stop    = db.stops.find_one({ "STOP_ID": student["STOP_ID"] })
+  Step 4:  Combine all fields into one JSON response for the frontend
+
+Example — GET /bus-location/:bus_id:
+
+  Step 1:  location = db.tracking.find_one({ "B_ID": bus_id }, sort by TIMESTAMP desc)
+  Step 2:  bus      = db.buses.find_one({ "B_ID": bus_id })
+  Step 3:  Add B_NO and D_NAME from bus into location response
+
+Example — GET /notifications/:student_id:
+
+  Step 1:  notifications = db.notifications.find({ "S_ID": student_id })
+  Step 2:  For each notification, lookup bus by B_ID for B_NO and driver name
+  Step 3:  Return enriched list to frontend
+
+
+================================================================================
+8. DATA FLOW — REAL-TIME BUS TRACKING
+================================================================================
+
+DRIVER UPDATES GPS
+------------------
+  1. Driver opens Profile → Driver Dashboard
+  2. Browser gets GPS coordinates (latitude, longitude)
+  3. POST /update-location  { bus_id, latitude, longitude }
+  4. Backend checks session (must be logged-in driver)
+  5. Inserts new document into tracking collection:
+       { T_ID, B_ID, TIMESTAMP, LATITUDE, LONGITUDE }
+  6. Document stored in MongoDB
+
+STUDENT VIEWS BUS ON MAP
+------------------------
+  1. Student opens Tracking page
+  2. Frontend polls GET /all-bus-locations every 3 seconds
+  3. Backend loops all buses, finds latest tracking doc per B_ID
+  4. Returns array of { B_ID, B_NO, D_NAME, LATITUDE, LONGITUDE, TIMESTAMP }
+  5. Google Maps renders markers from coordinates
+
+GPS SIMULATOR (testing without real driver)
+-------------------------------------------
+  1. Run: python backend/gps_simulator.py
+  2. Script calls POST /track/:bus_id with random coordinates
+  3. Same tracking collection receives the data
+
+
+================================================================================
+9. DATA FLOW — AUTHENTICATION
+================================================================================
+
+REGISTRATION
+  POST /auth/register
+  → Check user_accounts for duplicate username/email
+  → get_next_id("USER_ID")
+  → Insert into user_accounts
+  → If driver: also insert into drivers collection
+
+LOGIN
+  POST /auth/login
+  → Find user in user_accounts by USERNAME + PASSWORD_HASH
+  → Set Flask session cookie (user_id, username, email, user_type)
+  → If driver: also fetch drivers document by USER_ID
+
+SESSION
+  Stored in Flask filesystem session (not in MongoDB)
+  GET /auth/status checks session cookie on each request
+
+
+================================================================================
+10. DATA FLOW — STUDENT BUS REGISTRATION
+================================================================================
+
+  Two-step process:
+
+  Step A — Account creation (Auth modal):
+    POST /auth/register  →  user_accounts collection
+
+  Step B — Bus service registration (Register page):
+    POST /student-register  →  students collection
+    Fields: name, email, phone, route_id (R_ID), stop_id (STOP_ID)
+
+  Profile page joins students + routes + stops to show full registration info.
+
+
+================================================================================
+11. DATA FLOW — NOTIFICATIONS
+================================================================================
+
+  Background service: backend/notification_service.py
+
+  1. Reads recent tracking documents (last 10 minutes)
+  2. For each active bus, finds current stop position
+  3. Finds students on same route (students.R_ID = bus.R_ID)
+  4. If bus is 2 stops away from student's stop → create notification
+  5. Inserts into notifications collection
+
+  Frontend NotificationCenter:
+    GET /notifications/:student_id
+    PUT /notifications/:id/read
+    DELETE /notifications/:id
+
+
+================================================================================
+12. INDEXES (for query performance)
+================================================================================
+
+Created during import (import_sql_to_mongo.py):
+
+  user_accounts  →  unique index on USERNAME, EMAIL
+  buses          →  unique index on B_ID
+  routes         →  unique index on R_ID
+  stops          →  unique index on STOP_ID
+  students       →  index on S_EMAIL
+  tracking       →  compound index on (B_ID, TIMESTAMP desc)
+  notifications  →  compound index on (S_ID, CREATED_AT desc)
+
+
+================================================================================
+13. HOW TO SET UP / SEED THE DATABASE
+================================================================================
+
+  1. Configure backend/.env with MONGODB_URI and MONGODB_DB_NAME
+
+  2. Install Python dependencies:
+       cd backend
+       pip install -r requirements.txt
+
+  3. Import SQL schema data into MongoDB:
+       python import_sql_to_mongo.py
+
+     This reads:
+       database/schema.sql              (main tables + sample data)
+       database/add_notifications_system.sql  (admin user, extras)
+
+  4. Verify in MongoDB shell or Compass:
+       use smartbus
+       db.buses.countDocuments()      → 10
+       db.routes.countDocuments()     → 10
+       db.stops.countDocuments()      → 50
+       db.students.countDocuments()   → 10
+
+  Alternative: python seed_mongo.py  (calls the same import script)
+
+
+================================================================================
+14. TEST CREDENTIALS (after seed)
+================================================================================
+
+  student1 / password123   (student)
+  driver1  / password123   (driver)
+  admin    / admin123      (admin — from migration SQL)
+
+
+================================================================================
+15. KEY BACKEND FILES
+================================================================================
+
+  backend/db.py                  MongoDB connection, get_next_id(), helpers
+  backend/app.py                 All REST API routes
+  backend/import_sql_to_mongo.py SQL → MongoDB import script
+  backend/seed_mongo.py            Wrapper for import script
+  backend/notification_service.py  Background notification checker
+  backend/gps_simulator.py         Fake GPS for demos
+  backend/.env                     MONGODB_URI, Flask secrets
+  database/schema.sql              Original SQL schema (reference + seed source)
+
+
+================================================================================
+16. API ENDPOINTS → COLLECTIONS MAPPING
+================================================================================
+
+  Endpoint                              | Collections Used
+  --------------------------------------|----------------------------------
+  POST /auth/register                   | user_accounts, drivers
+  POST /auth/login                      | user_accounts, drivers
+  GET  /routes                          | routes
+  GET  /stops/:route_id                 | stops
+  GET  /buses                           | buses
+  GET  /buses/route/:route_id           | buses
+  POST /student-register                | students
+  GET  /student/details/:email          | students, routes, stops
+  GET  /schedule/:route_id              | schedules, buses
+  GET  /bus-location/:bus_id            | tracking, buses
+  POST /update-location                 | tracking
+  GET  /all-bus-locations               | buses, tracking
+  GET  /tracking-history/:bus_id        | tracking
+  POST /track/:bus_id                   | tracking (simulation)
+  GET  /notifications/:student_id       | notifications, buses
+  PUT  /notifications/:id/read          | notifications
+  POST /notifications/create            | notifications
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

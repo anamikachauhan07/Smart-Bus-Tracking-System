@@ -200,25 +200,32 @@ const Register = () => {
             <div className="page-header">
                 <h1><i className="fas fa-user-plus"></i> Bus Service Registration</h1>
                 <p>Register for bus tracking service to get notifications and track your bus</p>
-                {isPreFilled && (
-                    <div style={{
-                        background: '#dbeafe',
-                        border: '1px solid #60a5fa',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        marginTop: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px'
-                    }}>
-                        <i className="fas fa-info-circle" style={{color: '#2563eb'}}></i>
-                        <span style={{color: '#1e40af'}}>Account created! Now select your route and stop to complete registration.</span>
-                    </div>
-                )}
             </div>
             
-            <div className="content-card">
-                <form onSubmit={handleSubmit}>
+            {isPreFilled && (
+                <div className="info-banner success">
+                    <div className="banner-icon">
+                        <i className="fas fa-check-circle"></i>
+                    </div>
+                    <div className="banner-content">
+                        <h4>Account Created Successfully!</h4>
+                        <p>Complete your bus service registration by selecting your route and pickup stop below.</p>
+                    </div>
+                </div>
+            )}
+            
+            <div className="content-card register-card">
+                <div className="form-header">
+                    <div className="form-icon">
+                        <i className="fas fa-clipboard-list"></i>
+                    </div>
+                    <div>
+                        <h3>Registration Form</h3>
+                        <span>Fill in your details to register for bus service</span>
+                    </div>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="premium-form">
                     {/* Show Username if pre-filled */}
                     {isPreFilled && (
                         <div className="form-group">
@@ -361,9 +368,14 @@ const Register = () => {
                             </small>
                         )}
                     </div>
-                    <button type="submit" className="btn btn-success btn-block">
-                        <i className="fas fa-user-check"></i> Register Student
-                    </button>
+                    <div className="form-footer">
+                        <button type="submit" className="btn btn-success btn-block btn-large">
+                            <i className="fas fa-user-check"></i> Complete Registration
+                        </button>
+                        <p className="form-note">
+                            <i className="fas fa-lock"></i> Your information is secure and will only be used for bus service
+                        </p>
+                    </div>
                 </form>
             </div>
         </section>

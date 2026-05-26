@@ -6,7 +6,9 @@ import showToast from '../utils/toast';
 const Schedule = () => {
     const [routes, setRoutes] = useState([]);
     const [selectedRoute, setSelectedRoute] = useState('');
+    const [selectedRouteName, setSelectedRouteName] = useState('');
     const [schedules, setSchedules] = useState([]);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         loadRoutes();
@@ -23,12 +25,20 @@ const Schedule = () => {
         }
     };
 
+    const handleRouteChange = (e) => {
+        const routeId = e.target.value;
+        setSelectedRoute(routeId);
+        const route = routes.find(r => r.R_ID === parseInt(routeId));
+        setSelectedRouteName(route ? route.R_NAME : '');
+    };
+
     const getSchedule = async () => {
         if (!selectedRoute) {
             showToast('Please select a route', 'warning');
             return;
         }
 
+        setLoading(true);
         try {
             const response = await api.routes.getSchedule(selectedRoute);
             if (response.data.success) {
@@ -39,6 +49,8 @@ const Schedule = () => {
             }
         } catch (error) {
             showToast('Failed to load schedule', 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -48,6 +60,19 @@ const Schedule = () => {
             acc[day] = schedules.filter(s => s.DAY === day);
             return acc;
         }, {});
+    };
+
+    const getDayIcon = (day) => {
+        const icons = {
+            'Monday': 'fa-m',
+            'Tuesday': 'fa-t',
+            'Wednesday': 'fa-w',
+            'Thursday': 'fa-t',
+            'Friday': 'fa-f',
+            'Saturday': 'fa-s',
+            'Sunday': 'fa-s'
+        };
+        return icons[day] || 'fa-calendar-day';
     };
 
     const groupedSchedules = groupByDay(schedules);
@@ -60,47 +85,81 @@ const Schedule = () => {
             </div>
             
             <div className="content-card">
-                <div className="form-group">
-                    <label htmlFor="scheduleRoute"><i className="fas fa-route"></i> Select Route:</label>
-                    <select 
-                        id="scheduleRoute" 
-                        value={selectedRoute}
-                        onChange={(e) => setSelectedRoute(e.target.value)}
-                    >
-                        <option value="">Choose a route...</option>
-                        {routes.map(route => (
-                            <option key={route.R_ID} value={route.R_ID}>
-                                {route.R_NAME}
-                            </option>
-                        ))}
-                    </select>
+                <div className="schedule-controls">
+                    <div className="form-group">
+                        <label htmlFor="scheduleRoute"><i className="fas fa-route"></i> Select Route:</label>
+                        <select 
+                            id="scheduleRoute" 
+                            value={selectedRoute}
+                            onChange={handleRouteChange}
+                        >
+                            <option value="">Choose a route...</option>
+                            {routes.map(route => (
+                                <option key={route.R_ID} value={route.R_ID}>
+                                    {route.R_NAME} ({route.START_POINT} - {route.END_POINT})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <button className="btn btn-primary" onClick={getSchedule} disabled={loading}>
+                        {loading ? (
+                            <><i className="fas fa-spinner fa-spin"></i> Loading...</>
+                        ) : (
+                            <><i className="fas fa-calendar-alt"></i> Get Schedule</>
+                        )}
+                    </button>
                 </div>
-                <button className="btn btn-primary" onClick={getSchedule}>
-                    <i className="fas fa-calendar-alt"></i> Get Schedule
-                </button>
                 
-                <div id="scheduleInfo" className="schedule-info">
-                    {schedules.length > 0 && (
-                        <div className="schedule-container">
+                {schedules.length > 0 && (
+                    <div className="schedule-results">
+                        <div className="schedule-header-info">
+                            <div className="schedule-route-badge">
+                                <i className="fas fa-route"></i>
+                                <span>{selectedRouteName}</span>
+                            </div>
+                            <span className="schedule-count">
+                                <i className="fas fa-list"></i> {schedules.length} schedule(s) found
+                            </span>
+                        </div>
+                        
+                        <div className="schedule-days-grid">
                             {Object.entries(groupedSchedules).map(([day, daySchedules]) => {
                                 if (daySchedules.length === 0) return null;
                                 
                                 return (
-                                    <div key={day} className="schedule-day">
-                                        <h3><i className="fas fa-calendar-day"></i> {day}</h3>
-                                        <div className="schedule-table">
-                                            <div className="schedule-row schedule-header">
-                                                <div>Bus</div>
-                                                <div>Driver</div>
-                                                <div>Departure</div>
-                                                <div>Arrival</div>
+                                    <div key={day} className="schedule-day-card">
+                                        <div className="day-header">
+                                            <div className="day-icon">
+                                                <i className={`fas ${getDayIcon(day)}`}></i>
                                             </div>
+                                            <div className="day-info">
+                                                <h3>{day}</h3>
+                                                <span>{daySchedules.length} trip(s)</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="day-schedules">
                                             {daySchedules.map(schedule => (
-                                                <div key={schedule.SCH_ID} className="schedule-row">
-                                                    <div><i className="fas fa-bus"></i> {schedule.B_NO}</div>
-                                                    <div><i className="fas fa-user"></i> {schedule.D_NAME}</div>
-                                                    <div><i className="fas fa-clock"></i> {schedule.D_TIME}</div>
-                                                    <div><i className="fas fa-clock"></i> {schedule.A_TIME}</div>
+                                                <div key={schedule.SCH_ID} className="schedule-item">
+                                                    <div className="schedule-bus-info">
+                                                        <span className="bus-number">{schedule.B_NO}</span>
+                                                        <span className="driver-name">
+                                                            <i className="fas fa-user"></i> {schedule.D_NAME}
+                                                        </span>
+                                                    </div>
+                                                    <div className="schedule-times">
+                                                        <div className="time-block departure">
+                                                            <span className="time-label">Depart</span>
+                                                            <span className="time-value">{schedule.D_TIME}</span>
+                                                        </div>
+                                                        <div className="time-arrow">
+                                                            <i className="fas fa-arrow-right"></i>
+                                                        </div>
+                                                        <div className="time-block arrival">
+                                                            <span className="time-label">Arrive</span>
+                                                            <span className="time-value">{schedule.A_TIME}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -108,8 +167,18 @@ const Schedule = () => {
                                 );
                             })}
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
+                
+                {!loading && schedules.length === 0 && selectedRoute && (
+                    <div className="empty-state-card" style={{marginTop: '2rem'}}>
+                        <div className="empty-state-icon">
+                            <i className="fas fa-calendar-xmark"></i>
+                        </div>
+                        <h3>No Schedules Available</h3>
+                        <p>There are no schedules for this route yet</p>
+                    </div>
+                )}
             </div>
         </section>
     );
