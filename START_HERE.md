@@ -9,7 +9,7 @@
 Open **Terminal 1** and run:
 
 ```bash
-cd "D:\pbl projects\Bus_Tracker\backend"
+cd "E:\PROJECTS\Bus_Tracker-main\Smart-Bus-Tracking-System\backend"
 python app.py
 ```
 
